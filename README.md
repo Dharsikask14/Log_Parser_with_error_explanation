@@ -78,5 +78,3 @@ The AI is tuned for high-precision mentorship:
 
 ---
 
-## ⚖️ License
-MIT License.
