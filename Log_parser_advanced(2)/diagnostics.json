@@ -1,0 +1,13 @@
+[
+    {
+        "diagnosticsType": "vscode-problems-export",
+        "resource": "c:/Users/skdha/OneDrive/Documents/Log_parser_advanced/test.js",
+        "owner": "typescript",
+        "code": "2304",
+        "severity": 8,
+        "message": "Cannot find name 'nonExistentVariable'.",
+        "source": "ts",
+        "startLineNumber": 5,
+        "startColumn": 12
+    }
+]
