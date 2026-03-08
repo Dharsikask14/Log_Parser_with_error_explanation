@@ -1,0 +1,1603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Intelligent Log Parser</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0a0c10;
+      --surface: #111418;
+      --surface2: #161b22;
+      --border: #21262d;
+      --border-accent: #30363d;
+      --accent: #00d4aa;
+      --accent-dim: rgba(0,212,170,0.12);
+      --accent-glow: rgba(0,212,170,0.25);
+      --warn: #f79c1d;
+      --warn-dim: rgba(247,156,29,0.1);
+      --error: #f85149;
+      --error-dim: rgba(248,81,73,0.1);
+      --info: #58a6ff;
+      --info-dim: rgba(88,166,255,0.1);
+      --low: #3fb950;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --text-subtle: #6e7681;
+      --radius: 8px;
+      --radius-lg: 12px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* Background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,170,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,170,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ─── Header ─────────────────────────────── */
+    header {
+      position: relative;
+      z-index: 10;
+      padding: 20px 32px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(10,12,16,0.95);
+      backdrop-filter: blur(12px);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--accent), #00b8a0);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .logo-text {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 17px;
+      letter-spacing: -0.3px;
+    }
+
+    .logo-text span {
+      color: var(--accent);
+    }
+
+    .header-meta {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .usage-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .usage-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 6px var(--accent);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ─── Main Layout ─────────────────────────── */
+    main {
+      position: relative;
+      z-index: 1;
+      flex: 1;
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      grid-template-rows: 1fr;
+      height: calc(100vh - 73px);
+      overflow: hidden;
+    }
+
+    /* ─── Left Panel ─────────────────────────── */
+    .left-panel {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      overflow-y: auto;
+    }
+
+    .section-header {
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .section-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    /* ─── Drop Zone ─────────────────────────── */
+    .drop-zone-wrapper {
+      padding: 16px;
+    }
+
+    .drop-zone {
+      border: 2px dashed var(--border-accent);
+      border-radius: var(--radius-lg);
+      padding: 32px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: var(--surface2);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .drop-zone::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center, var(--accent-dim), transparent 70%);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(0,212,170,0.04);
+    }
+
+    .drop-zone:hover::before, .drop-zone.drag-over::before {
+      opacity: 1;
+    }
+
+    .drop-zone.drag-over {
+      transform: scale(1.01);
+      box-shadow: 0 0 30px var(--accent-glow);
+    }
+
+    .drop-icon {
+      font-size: 28px;
+      margin-bottom: 10px;
+      display: block;
+    }
+
+    .drop-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .drop-subtitle {
+      font-size: 11px;
+      color: var(--text-subtle);
+      line-height: 1.6;
+    }
+
+    .drop-subtitle strong {
+      color: var(--accent);
+    }
+
+    #fileInput { display: none; }
+
+    /* ─── File Badge ─────────────────────────── */
+    .file-badge {
+      margin: 0 16px 12px;
+      padding: 10px 14px;
+      background: var(--accent-dim);
+      border: 1px solid var(--accent);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .file-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .file-ext {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      background: var(--accent);
+      color: #000;
+      border-radius: 4px;
+      flex-shrink: 0;
+      text-transform: uppercase;
+    }
+
+    .file-name {
+      font-size: 12px;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .remove-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 2px;
+      flex-shrink: 0;
+      transition: color 0.2s;
+    }
+
+    .remove-btn:hover { color: var(--error); }
+
+    /* ─── API Config ─────────────────────────── */
+    .api-config {
+      padding: 0 16px 16px;
+    }
+
+    .field-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .input-wrapper {
+      position: relative;
+    }
+
+    .text-input {
+      width: 100%;
+      padding: 9px 12px;
+      background: var(--surface2);
+      border: 1px solid var(--border-accent);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+
+    .text-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    .text-input::placeholder { color: var(--text-subtle); }
+
+    .toggle-key {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-subtle);
+      cursor: pointer;
+      font-size: 13px;
+      padding: 2px;
+    }
+
+    .model-select {
+      width: 100%;
+      padding: 9px 12px;
+      background: var(--surface2);
+      border: 1px solid var(--border-accent);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238b949e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+    }
+
+    .model-select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    .model-select option { background: var(--surface2); }
+
+    .field-group { margin-bottom: 12px; }
+
+    /* ─── Log Content Preview ─────────────────── */
+    .preview-section {
+      padding: 0 16px 12px;
+    }
+
+    .preview-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      max-height: 140px;
+      overflow-y: auto;
+      font-size: 10.5px;
+      line-height: 1.7;
+      color: var(--text-muted);
+      padding: 10px 12px;
+    }
+
+    .preview-box::-webkit-scrollbar { width: 4px; }
+    .preview-box::-webkit-scrollbar-track { background: transparent; }
+    .preview-box::-webkit-scrollbar-thumb { background: var(--border-accent); border-radius: 2px; }
+
+    /* ─── Analyze Button ─────────────────────── */
+    .analyze-btn {
+      margin: 0 16px 16px;
+      width: calc(100% - 32px);
+      padding: 12px;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: var(--radius);
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .analyze-btn:hover:not(:disabled) {
+      background: #00ffe4;
+      box-shadow: 0 0 24px var(--accent-glow);
+      transform: translateY(-1px);
+    }
+
+    .analyze-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .analyze-btn.loading {
+      background: var(--surface2);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+    }
+
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── Stats Strip ─────────────────────────── */
+    .stats-strip {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-val {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 18px;
+      line-height: 1;
+      margin-bottom: 3px;
+    }
+
+    .stat-val.error { color: var(--error); }
+    .stat-val.warn { color: var(--warn); }
+    .stat-val.info { color: var(--info); }
+    .stat-val.success { color: var(--low); }
+
+    .stat-lbl {
+      font-size: 9px;
+      color: var(--text-subtle);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    /* ─── Right Panel ─────────────────────────── */
+    .right-panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg);
+    }
+
+    .results-header {
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+    }
+
+    .results-tabs {
+      display: flex;
+      gap: 4px;
+    }
+
+    .tab-btn {
+      padding: 5px 14px;
+      background: none;
+      border: 1px solid transparent;
+      border-radius: 20px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn.active {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .tab-btn:hover:not(.active) {
+      color: var(--text);
+      border-color: var(--border-accent);
+    }
+
+    .results-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .action-btn {
+      padding: 6px 12px;
+      background: var(--surface2);
+      border: 1px solid var(--border-accent);
+      border-radius: var(--radius);
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .action-btn:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    /* ─── Results Content ─────────────────────── */
+    .results-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 24px;
+    }
+
+    .results-content::-webkit-scrollbar { width: 6px; }
+    .results-content::-webkit-scrollbar-track { background: transparent; }
+    .results-content::-webkit-scrollbar-thumb { background: var(--border-accent); border-radius: 3px; }
+
+    /* ─── Empty State ─────────────────────────── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 16px;
+      color: var(--text-subtle);
+    }
+
+    .empty-icon {
+      font-size: 52px;
+      opacity: 0.3;
+    }
+
+    .empty-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--text-muted);
+    }
+
+    .empty-desc {
+      font-size: 12px;
+      text-align: center;
+      line-height: 1.8;
+      max-width: 320px;
+    }
+
+    /* ─── Analysis Cards ─────────────────────── */
+    .analysis-section {
+      margin-bottom: 24px;
+    }
+
+    .analysis-section-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-subtle);
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .analysis-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      margin-bottom: 10px;
+      position: relative;
+      overflow: hidden;
+      animation: cardIn 0.4s ease forwards;
+      opacity: 0;
+    }
+
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .analysis-card::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      border-radius: 3px 0 0 3px;
+    }
+
+    .card-high::before { background: var(--error); }
+    .card-medium::before { background: var(--warn); }
+    .card-low::before { background: var(--low); }
+    .card-info::before { background: var(--info); }
+
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .card-error-name {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text);
+      line-height: 1.3;
+    }
+
+    .severity-tag {
+      padding: 3px 9px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: 700;
+      flex-shrink: 0;
+      letter-spacing: 0.5px;
+    }
+
+    .sev-high { background: var(--error-dim); color: var(--error); border: 1px solid rgba(248,81,73,0.25); }
+    .sev-medium { background: var(--warn-dim); color: var(--warn); border: 1px solid rgba(247,156,29,0.25); }
+    .sev-low { background: rgba(63,185,80,0.1); color: var(--low); border: 1px solid rgba(63,185,80,0.25); }
+    .sev-info { background: var(--info-dim); color: var(--info); border: 1px solid rgba(88,166,255,0.25); }
+
+    .card-fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .card-field {
+      background: var(--surface2);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+
+    .field-key {
+      font-size: 9px;
+      color: var(--text-subtle);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 3px;
+    }
+
+    .field-value {
+      font-size: 12px;
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    .card-suggestion {
+      background: rgba(0,212,170,0.06);
+      border: 1px solid rgba(0,212,170,0.15);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      gap: 8px;
+    }
+
+    .card-suggestion::before {
+      content: '→';
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .card-raw {
+      margin-top: 10px;
+    }
+
+    .card-raw summary {
+      cursor: pointer;
+      font-size: 11px;
+      color: var(--text-subtle);
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card-raw summary::-webkit-details-marker { display: none; }
+
+    .card-raw summary::before {
+      content: '▶';
+      font-size: 8px;
+      transition: transform 0.2s;
+    }
+
+    details[open] .card-raw summary::before { transform: rotate(90deg); }
+
+    .raw-content {
+      margin-top: 8px;
+      padding: 10px;
+      background: var(--bg);
+      border-radius: 6px;
+      font-size: 10.5px;
+      color: var(--text-muted);
+      white-space: pre-wrap;
+      word-break: break-all;
+      line-height: 1.7;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    /* ─── Log View ─────────────────────────────── */
+    .log-view {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .log-toolbar {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .search-input {
+      flex: 1;
+      padding: 6px 10px;
+      background: var(--bg);
+      border: 1px solid var(--border-accent);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      outline: none;
+    }
+
+    .search-input:focus { border-color: var(--accent); }
+    .search-input::placeholder { color: var(--text-subtle); }
+
+    .filter-select {
+      padding: 6px 10px;
+      background: var(--bg);
+      border: 1px solid var(--border-accent);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .log-lines {
+      padding: 12px;
+      font-size: 11px;
+      line-height: 1.9;
+      max-height: calc(100vh - 300px);
+      overflow-y: auto;
+    }
+
+    .log-lines::-webkit-scrollbar { width: 4px; }
+    .log-lines::-webkit-scrollbar-thumb { background: var(--border-accent); }
+
+    .log-line {
+      display: flex;
+      gap: 10px;
+      padding: 2px 0;
+      border-radius: 3px;
+      transition: background 0.1s;
+    }
+
+    .log-line:hover { background: rgba(255,255,255,0.03); }
+
+    .line-num {
+      color: var(--text-subtle);
+      min-width: 36px;
+      text-align: right;
+      user-select: none;
+      flex-shrink: 0;
+      font-size: 10px;
+      padding-top: 1px;
+    }
+
+    .line-text { flex: 1; word-break: break-word; }
+
+    .line-error .line-text { color: #ff7f7a; }
+    .line-warn .line-text { color: #ffc56b; }
+    .line-info .line-text { color: #80b8ff; }
+    .line-success .line-text { color: #7ee787; }
+    .line-highlight { background: rgba(0,212,170,0.08); }
+
+    /* ─── Knowledge Panel ─────────────────────── */
+    .knowledge-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .knowledge-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .knowledge-num {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      color: var(--accent);
+      min-width: 24px;
+    }
+
+    .knowledge-content { flex: 1; }
+    .knowledge-error { font-size: 12px; color: var(--text); margin-bottom: 4px; }
+    .knowledge-exp { font-size: 11px; color: var(--text-muted); line-height: 1.6; }
+
+    .knowledge-del {
+      background: none;
+      border: none;
+      color: var(--text-subtle);
+      cursor: pointer;
+      font-size: 13px;
+      padding: 2px;
+      transition: color 0.2s;
+      flex-shrink: 0;
+    }
+
+    .knowledge-del:hover { color: var(--error); }
+
+    /* ─── Toast ─────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 18px;
+      background: var(--surface);
+      border: 1px solid var(--border-accent);
+      border-radius: var(--radius);
+      font-size: 12px;
+      color: var(--text);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      z-index: 1000;
+      transform: translateY(60px);
+      opacity: 0;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    #toast.success { border-color: var(--accent); }
+    #toast.error-toast { border-color: var(--error); }
+
+    /* ─── Divider ────────────────────────────── */
+    .divider { height: 1px; background: var(--border); margin: 8px 0; }
+
+    /* ─── Scrollbar global ───────────────────── */
+    .left-panel::-webkit-scrollbar { width: 4px; }
+    .left-panel::-webkit-scrollbar-track { background: transparent; }
+    .left-panel::-webkit-scrollbar-thumb { background: var(--border-accent); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<!-- ─── Header ───────────────────────────────────── -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    <div class="logo-text">Intelligent <span>Log Parser</span></div>
+  </div>
+  <div class="header-meta">
+    <div class="usage-badge">
+      <div class="usage-dot"></div>
+      <span id="usageDisplay">100 AI calls / 15 min</span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- ─── Left Panel ──────────────────────────── -->
+  <div class="left-panel">
+
+    <!-- Drop Zone -->
+    <div class="section-header">
+      <span class="section-title">Upload Log File</span>
+    </div>
+    <div class="drop-zone-wrapper">
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <span class="drop-icon">📂</span>
+        <div class="drop-title">Drop your log file here</div>
+        <div class="drop-subtitle">or click to browse<br/>Accepts <strong>.log files only</strong></div>
+      </div>
+      <input type="file" id="fileInput" accept=".log"/>
+    </div>
+
+    <!-- File Badge (hidden initially) -->
+    <div class="file-badge" id="fileBadge" style="display:none">
+      <div class="file-info">
+        <span class="file-ext" id="fileExt">LOG</span>
+        <span class="file-name" id="fileName">—</span>
+      </div>
+      <button class="remove-btn" onclick="clearFile()" title="Remove file">✕</button>
+    </div>
+
+    <!-- Log Preview -->
+    <div class="preview-section" id="previewSection" style="display:none">
+      <span class="field-label">Preview</span>
+      <div class="preview-box" id="previewBox"></div>
+    </div>
+
+    <div class="divider" style="margin: 4px 16px;"></div>
+
+    <!-- API Config -->
+    <div class="section-header">
+      <span class="section-title">AI Configuration</span>
+    </div>
+    <div class="api-config">
+      <div class="field-group">
+        <label class="field-label" for="apiKey">Groq API Key</label>
+        <div class="input-wrapper">
+          <input type="password" class="text-input" id="apiKey" placeholder="gsk_••••••••••••••••••"/>
+          <button class="toggle-key" onclick="toggleKeyVisibility()" title="Show/hide">👁</button>
+        </div>
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="modelSelect">Model</label>
+        <select class="model-select" id="modelSelect">
+          <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
+          <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
+          <option value="llama-3.2-90b-vision-preview">llama-3.2-90b-vision-preview</option>
+          <option value="mixtral-8x7b-32768">mixtral-8x7b-32768</option>
+          <option value="gemma2-9b-it">gemma2-9b-it</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Analyze Button -->
+    <button class="analyze-btn" id="analyzeBtn" onclick="startAnalysis()" disabled>
+      <span>⚡</span> Analyze Log File
+    </button>
+
+    <!-- Stats Strip -->
+    <div class="stats-strip">
+      <div class="stat-item">
+        <div class="stat-val error" id="statErrors">0</div>
+        <div class="stat-lbl">Errors</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val warn" id="statWarnings">0</div>
+        <div class="stat-lbl">Warnings</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val info" id="statInfo">0</div>
+        <div class="stat-lbl">Info</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val success" id="statLines">0</div>
+        <div class="stat-lbl">Lines</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ─── Right Panel ─────────────────────────── -->
+  <div class="right-panel">
+    <div class="results-header">
+      <div class="results-tabs">
+        <button class="tab-btn active" onclick="switchTab('analysis', this)">Analysis</button>
+        <button class="tab-btn" onclick="switchTab('log', this)">Log View</button>
+        <button class="tab-btn" onclick="switchTab('knowledge', this)">Knowledge Base</button>
+      </div>
+      <div class="results-actions">
+        <button class="action-btn" onclick="exportResults()">↓ Export</button>
+        <button class="action-btn" onclick="clearResults()">✕ Clear</button>
+      </div>
+    </div>
+
+    <!-- Analysis Tab -->
+    <div class="results-content" id="tab-analysis">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">🔍</div>
+        <div class="empty-title">No Analysis Yet</div>
+        <div class="empty-desc">Upload a <strong style="color:var(--accent)">.log</strong> file, enter your Groq API key, and click Analyze to get intelligent diagnostics with AI-powered explanations.</div>
+      </div>
+      <div id="analysisResults" style="display:none"></div>
+    </div>
+
+    <!-- Log View Tab -->
+    <div class="results-content" id="tab-log" style="display:none">
+      <div class="log-view">
+        <div class="log-toolbar">
+          <input type="text" class="search-input" id="logSearch" placeholder="Search log lines…" oninput="filterLogView()"/>
+          <select class="filter-select" id="logFilter" onchange="filterLogView()">
+            <option value="all">All Lines</option>
+            <option value="error">Errors</option>
+            <option value="warn">Warnings</option>
+            <option value="info">Info</option>
+          </select>
+        </div>
+        <div class="log-lines" id="logLines">
+          <div style="color:var(--text-subtle);font-size:12px;padding:20px;text-align:center">Upload a .log file to view its contents</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Knowledge Base Tab -->
+    <div class="results-content" id="tab-knowledge" style="display:none">
+      <div id="knowledgeList"></div>
+    </div>
+  </div>
+</main>
+
+<!-- Toast -->
+<div id="toast">
+  <span id="toastIcon">✓</span>
+  <span id="toastMsg"></span>
+</div>
+
+<script>
+// ─── State ─────────────────────────────────────────
+let logContent = '';
+let logLines = [];
+let currentFile = null;
+let knowledge = [];
+let usageData = { count: 0, lastReset: Date.now() };
+const USAGE_LIMIT = 100;
+const RESET_INTERVAL = 15 * 60 * 1000;
+
+// ─── Init ───────────────────────────────────────────
+window.addEventListener('load', () => {
+  loadKnowledge();
+  loadUsage();
+  updateUsageDisplay();
+  renderKnowledgeList();
+
+  // Restore API key from sessionStorage
+  const savedKey = sessionStorage.getItem('groq_api_key');
+  if (savedKey) document.getElementById('apiKey').value = savedKey;
+
+  // Save API key on change
+  document.getElementById('apiKey').addEventListener('change', () => {
+    sessionStorage.setItem('groq_api_key', document.getElementById('apiKey').value);
+  });
+});
+
+// ─── Drop Zone ──────────────────────────────────────
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZone.classList.add('drag-over');
+});
+
+dropZone.addEventListener('dragleave', () => {
+  dropZone.classList.remove('drag-over');
+});
+
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) handleFile(fileInput.files[0]);
+});
+
+function handleFile(file) {
+  // Only accept .log files
+  if (!file.name.toLowerCase().endsWith('.log')) {
+    showToast('Only .log files are accepted.', 'error');
+    return;
+  }
+
+  currentFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    logContent = e.target.result;
+    logLines = logContent.split('\n');
+    showFileBadge(file.name);
+    showPreview();
+    computeStats();
+    renderLogView();
+    document.getElementById('analyzeBtn').disabled = false;
+    showToast(`Loaded: ${file.name}`, 'success');
+  };
+  reader.readAsText(file);
+}
+
+function showFileBadge(name) {
+  document.getElementById('fileName').textContent = name;
+  document.getElementById('fileExt').textContent = 'LOG';
+  document.getElementById('fileBadge').style.display = 'flex';
+}
+
+function clearFile() {
+  currentFile = null;
+  logContent = '';
+  logLines = [];
+  document.getElementById('fileBadge').style.display = 'none';
+  document.getElementById('previewSection').style.display = 'none';
+  document.getElementById('analyzeBtn').disabled = true;
+  document.getElementById('logLines').innerHTML = '<div style="color:var(--text-subtle);font-size:12px;padding:20px;text-align:center">Upload a .log file to view its contents</div>';
+  fileInput.value = '';
+  resetStats();
+}
+
+function showPreview() {
+  document.getElementById('previewSection').style.display = 'block';
+  const preview = logLines.slice(0, 10).join('\n');
+  document.getElementById('previewBox').textContent = preview || '(empty file)';
+}
+
+// ─── Stats ──────────────────────────────────────────
+function computeStats() {
+  let errors = 0, warnings = 0, info = 0;
+  for (const line of logLines) {
+    const l = line.toLowerCase();
+    if (l.includes('error') || l.includes('exception') || l.includes('critical') || l.includes('fatal')) errors++;
+    else if (l.includes('warn') || l.includes('warning')) warnings++;
+    else if (l.includes('info') || l.includes('debug')) info++;
+  }
+  document.getElementById('statErrors').textContent = errors;
+  document.getElementById('statWarnings').textContent = warnings;
+  document.getElementById('statInfo').textContent = info;
+  document.getElementById('statLines').textContent = logLines.filter(l => l.trim()).length;
+}
+
+function resetStats() {
+  ['statErrors','statWarnings','statInfo','statLines'].forEach(id => {
+    document.getElementById(id).textContent = '0';
+  });
+}
+
+// ─── Log View ───────────────────────────────────────
+function renderLogView() {
+  filterLogView();
+}
+
+function filterLogView() {
+  const search = document.getElementById('logSearch').value.toLowerCase();
+  const filter = document.getElementById('logFilter').value;
+  const container = document.getElementById('logLines');
+
+  const displayLines = logLines.filter((line, idx) => {
+    if (!line.trim()) return false;
+    const l = line.toLowerCase();
+    if (filter === 'error' && !(l.includes('error') || l.includes('exception') || l.includes('critical'))) return false;
+    if (filter === 'warn' && !l.includes('warn')) return false;
+    if (filter === 'info' && !(l.includes('info') || l.includes('debug'))) return false;
+    if (search && !l.includes(search)) return false;
+    return true;
+  });
+
+  if (displayLines.length === 0) {
+    container.innerHTML = '<div style="color:var(--text-subtle);font-size:12px;padding:20px;text-align:center">No matching log lines</div>';
+    return;
+  }
+
+  container.innerHTML = displayLines.map((line, i) => {
+    const l = line.toLowerCase();
+    let cls = '';
+    if (l.includes('error') || l.includes('exception') || l.includes('critical') || l.includes('fatal')) cls = 'line-error';
+    else if (l.includes('warn')) cls = 'line-warn';
+    else if (l.includes('info')) cls = 'line-info';
+    else if (l.includes('success') || l.includes('ok')) cls = 'line-success';
+
+    const highlighted = search ? line.replace(new RegExp(search, 'gi'), m => `<mark style="background:rgba(0,212,170,0.3);color:var(--accent);border-radius:2px">${m}</mark>`) : escapeHtml(line);
+
+    return `<div class="log-line ${cls}">
+      <span class="line-num">${i+1}</span>
+      <span class="line-text">${highlighted}</span>
+    </div>`;
+  }).join('');
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── Knowledge Base ─────────────────────────────────
+function loadKnowledge() {
+  try {
+    const saved = localStorage.getItem('log_parser_knowledge');
+    if (saved) knowledge = JSON.parse(saved);
+  } catch(e) { knowledge = []; }
+}
+
+function saveKnowledge() {
+  localStorage.setItem('log_parser_knowledge', JSON.stringify(knowledge));
+}
+
+function findExplanation(errorText) {
+  for (const item of knowledge) {
+    if (errorText.toLowerCase().includes(item.error.toLowerCase())) {
+      return item.explanation;
+    }
+  }
+  return null;
+}
+
+function trainError(errorText, explanation) {
+  const exists = knowledge.some(item => item.error.toLowerCase() === errorText.toLowerCase());
+  if (!exists) {
+    knowledge.push({ error: errorText, explanation });
+    saveKnowledge();
+    renderKnowledgeList();
+  }
+}
+
+function renderKnowledgeList() {
+  const container = document.getElementById('knowledgeList');
+  if (knowledge.length === 0) {
+    container.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">🧠</div>
+      <div class="empty-title">No Knowledge Stored</div>
+      <div class="empty-desc">Run analyses to automatically learn from errors and build a local knowledge base for faster future lookups.</div>
+    </div>`;
+    return;
+  }
+
+  container.innerHTML = `<div class="knowledge-list">` + knowledge.map((item, i) => `
+    <div class="knowledge-item">
+      <span class="knowledge-num">#${i+1}</span>
+      <div class="knowledge-content">
+        <div class="knowledge-error">${escapeHtml(item.error.substring(0, 100))}</div>
+        <div class="knowledge-exp">${escapeHtml(item.explanation.substring(0, 200))}</div>
+      </div>
+      <button class="knowledge-del" onclick="deleteKnowledge(${i})" title="Remove">✕</button>
+    </div>
+  `).join('') + `</div>`;
+}
+
+function deleteKnowledge(idx) {
+  knowledge.splice(idx, 1);
+  saveKnowledge();
+  renderKnowledgeList();
+  showToast('Entry removed from knowledge base', 'success');
+}
+
+// ─── Usage Limiter ──────────────────────────────────
+function loadUsage() {
+  try {
+    const saved = localStorage.getItem('log_parser_usage');
+    if (saved) usageData = JSON.parse(saved);
+    // Reset if 15 min passed
+    if (Date.now() - usageData.lastReset > RESET_INTERVAL) {
+      usageData = { count: 0, lastReset: Date.now() };
+      saveUsage();
+    }
+  } catch(e) {
+    usageData = { count: 0, lastReset: Date.now() };
+  }
+}
+
+function saveUsage() {
+  localStorage.setItem('log_parser_usage', JSON.stringify(usageData));
+}
+
+function checkLimit() {
+  if (Date.now() - usageData.lastReset > RESET_INTERVAL) {
+    usageData = { count: 0, lastReset: Date.now() };
+    saveUsage();
+  }
+  return usageData.count < USAGE_LIMIT;
+}
+
+function incrementUsage() {
+  usageData.count++;
+  saveUsage();
+  updateUsageDisplay();
+}
+
+function updateUsageDisplay() {
+  const remaining = Math.max(0, USAGE_LIMIT - usageData.count);
+  document.getElementById('usageDisplay').textContent = `${remaining} AI calls remaining`;
+}
+
+// ─── Error Location Extraction ───────────────────────
+function extractLocation(text) {
+  const patterns = [
+    /:(\d+):(\d+)/,
+    /at\s+.*\s+\(.*?(\d+):(\d+)\)/,
+    /line\s+(\d+).*?column\s+(\d+)/i,
+    /line[:\s]+(\d+)/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) {
+      return { line: match[1], col: match[2] || '?' };
+    }
+  }
+  return null;
+}
+
+// ─── AI Analysis ────────────────────────────────────
+async function explainError(context, isStatic = false, location = null) {
+  if (!checkLimit()) {
+    return `- . Status: AI limit reached (${USAGE_LIMIT}/15min)\n- . Hint: Train manually or wait for reset.`;
+  }
+
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) {
+    return `- . Error: No Groq API key provided.\n- . Suggestion: Enter your API key in the configuration panel.`;
+  }
+
+  const model = document.getElementById('modelSelect').value;
+  const analysisType = isStatic ? 'Preliminary' : 'Execution';
+  const locContext = location
+    ? `Location: Line ${location.line}, Col ${location.col || '?'}`
+    : 'Location: Identify the exact Line and Column from the source below.';
+
+  const prompt = `You are a senior mentor analyzing log files.
+Stage: ${analysisType}
+${locContext}
+
+Analyze:
+${context.substring(0, 2000)}
+
+RULES:
+1. Explanation < 10 WORDS.
+2. FORMAT:
+- . Error: [Name]
+- . Severity: [High/Medium/Low]
+- . Location: [Line N, Col M]
+- . Explanation: [Short < 10 words]
+- . Suggestion: [One-line fix]`;
+
+  try {
+    incrementUsage();
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.3,
+        max_tokens: 300
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return `- . Error: API call failed (${res.status})\n- . Suggestion: ${err?.error?.message || 'Check your API key and try again.'}`;
+    }
+
+    const data = await res.json();
+    return data.choices[0].message.content.trim();
+  } catch (err) {
+    return `- . Error: Network error - ${err.message}\n- . Suggestion: Check internet connection.`;
+  }
+}
+
+// ─── Parse AI Response ────────────────────────────────
+function parseAIResponse(raw) {
+  const lines = raw.split('\n').filter(l => l.trim());
+  const result = {
+    errorName: '',
+    severity: '',
+    location: '',
+    explanation: '',
+    suggestion: '',
+    raw
+  };
+
+  for (const line of lines) {
+    const l = line.toLowerCase();
+    if (l.includes('error:')) result.errorName = line.replace(/^.*error:\s*/i, '').trim();
+    else if (l.includes('severity:')) result.severity = line.replace(/^.*severity:\s*/i, '').trim();
+    else if (l.includes('location:')) result.location = line.replace(/^.*location:\s*/i, '').trim();
+    else if (l.includes('explanation:')) result.explanation = line.replace(/^.*explanation:\s*/i, '').trim();
+    else if (l.includes('suggestion:')) result.suggestion = line.replace(/^.*suggestion:\s*/i, '').trim();
+  }
+
+  if (!result.errorName) result.errorName = 'Unknown Issue';
+  if (!result.severity) result.severity = 'Medium';
+
+  return result;
+}
+
+function getSeverityClass(sev) {
+  const s = sev.toLowerCase();
+  if (s.includes('high') || s.includes('critical')) return 'high';
+  if (s.includes('medium') || s.includes('warn')) return 'medium';
+  if (s.includes('low')) return 'low';
+  return 'info';
+}
+
+function renderCard(parsed, index) {
+  const sevClass = getSeverityClass(parsed.severity);
+  const delay = index * 80;
+  return `<div class="analysis-card card-${sevClass}" style="animation-delay:${delay}ms">
+    <div class="card-top">
+      <div class="card-error-name">${escapeHtml(parsed.errorName)}</div>
+      <span class="severity-tag sev-${sevClass}">${escapeHtml(parsed.severity)}</span>
+    </div>
+    <div class="card-fields">
+      ${parsed.location ? `<div class="card-field">
+        <div class="field-key">Location</div>
+        <div class="field-value">${escapeHtml(parsed.location)}</div>
+      </div>` : ''}
+      ${parsed.explanation ? `<div class="card-field">
+        <div class="field-key">Explanation</div>
+        <div class="field-value">${escapeHtml(parsed.explanation)}</div>
+      </div>` : ''}
+    </div>
+    ${parsed.suggestion ? `<div class="card-suggestion">${escapeHtml(parsed.suggestion)}</div>` : ''}
+    <details class="card-raw">
+      <summary>Raw AI Response</summary>
+      <div class="raw-content">${escapeHtml(parsed.raw)}</div>
+    </details>
+  </div>`;
+}
+
+// ─── Main Analysis ───────────────────────────────────
+async function startAnalysis() {
+  if (!logContent) { showToast('No log file loaded.', 'error'); return; }
+
+  const btn = document.getElementById('analyzeBtn');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.innerHTML = '<div class="spinner"></div><span>Analyzing…</span>';
+
+  document.getElementById('emptyState').style.display = 'none';
+  const resultsEl = document.getElementById('analysisResults');
+  resultsEl.style.display = 'block';
+  resultsEl.innerHTML = '';
+
+  switchTab('analysis', document.querySelector('.tab-btn'));
+
+  try {
+    // Step 1: Static analysis on log content
+    const staticSection = document.createElement('div');
+    staticSection.className = 'analysis-section';
+    staticSection.innerHTML = '<div class="analysis-section-title">⬡ Preliminary Log Analysis</div>';
+
+    const loc = extractLocation(logContent);
+    const previewContext = `Log File: ${currentFile?.name}\nLines: ${logLines.length}\nContent:\n${logContent.substring(0, 1500)}`;
+    const staticResponse = await explainError(previewContext, true, loc);
+    const staticParsed = parseAIResponse(staticResponse);
+
+    staticSection.innerHTML += renderCard(staticParsed, 0);
+    resultsEl.appendChild(staticSection);
+
+    // Train knowledge
+    const firstLine = logContent.split('\n')[0].substring(0, 100);
+    const existing = findExplanation(firstLine);
+    if (!existing && !staticResponse.includes('limit reached') && !staticResponse.includes('No Groq')) {
+      trainError(firstLine, staticParsed.explanation || staticParsed.errorName);
+    }
+
+    // Step 2: Analyze individual error lines
+    const errorLines = logLines.filter(line => {
+      const l = line.toLowerCase();
+      return l.includes('error') || l.includes('exception') || l.includes('critical') ||
+             l.includes('fatal') || l.includes('traceback') || l.includes('uncaught');
+    });
+
+    const uniqueErrors = [...new Set(errorLines.map(l => l.trim().substring(0, 200)))].slice(0, 5);
+
+    if (uniqueErrors.length > 0) {
+      const execSection = document.createElement('div');
+      execSection.className = 'analysis-section';
+      execSection.innerHTML = '<div class="analysis-section-title">⬡ Error-Level Analysis</div>';
+
+      for (let i = 0; i < uniqueErrors.length; i++) {
+        const err = uniqueErrors[i];
+        const cached = findExplanation(err);
+
+        if (cached) {
+          const cached_parsed = parseAIResponse(cached);
+          execSection.innerHTML += renderCard({ ...cached_parsed, raw: `[From Knowledge Base]\n${cached}` }, i + 1);
+        } else {
+          const locErr = extractLocation(err);
+          const context = `Error Line: ${err}\nFull Log Context:\n${logContent.substring(0, 1200)}`;
+          const resp = await explainError(context, false, locErr);
+          const parsed = parseAIResponse(resp);
+          execSection.innerHTML += renderCard(parsed, i + 1);
+
+          if (!resp.includes('limit reached') && !resp.includes('API call failed') && !resp.includes('Network error')) {
+            trainError(err.substring(0, 100), resp);
+          }
+        }
+      }
+
+      resultsEl.appendChild(execSection);
+    }
+
+    showToast('Analysis complete!', 'success');
+
+  } catch(err) {
+    resultsEl.innerHTML += `<div class="analysis-card card-high" style="animation:cardIn 0.3s ease forwards">
+      <div class="card-top"><div class="card-error-name">Analysis Failed</div><span class="severity-tag sev-high">Error</span></div>
+      <div class="card-suggestion">${escapeHtml(err.message)}</div>
+    </div>`;
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.innerHTML = '<span>⚡</span> Analyze Log File';
+  }
+}
+
+// ─── Tab Switching ───────────────────────────────────
+function switchTab(tab, el) {
+  ['analysis','log','knowledge'].forEach(t => {
+    document.getElementById(`tab-${t}`).style.display = t === tab ? 'block' : 'none';
+  });
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  if (el) el.classList.add('active');
+}
+
+// ─── Actions ─────────────────────────────────────────
+function clearResults() {
+  document.getElementById('analysisResults').style.display = 'none';
+  document.getElementById('analysisResults').innerHTML = '';
+  document.getElementById('emptyState').style.display = 'flex';
+  showToast('Results cleared', 'success');
+}
+
+function exportResults() {
+  const results = document.getElementById('analysisResults').innerText;
+  if (!results || !results.trim()) {
+    showToast('No results to export', 'error');
+    return;
+  }
+  const blob = new Blob([results], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `log_analysis_${Date.now()}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Results exported!', 'success');
+}
+
+function toggleKeyVisibility() {
+  const input = document.getElementById('apiKey');
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+// ─── Toast ────────────────────────────────────────────
+function showToast(msg, type = 'success') {
+  const toast = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  document.getElementById('toastIcon').textContent = type === 'error' ? '✕' : '✓';
+  toast.className = type === 'error' ? 'error-toast' : 'success';
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
